@@ -43,6 +43,15 @@
                 u50000 ;; Rare: 500 STX
                 u100000)))) ;; Legendary: 1000 STX
 
+(define-private (update-user-collections (seller principal) (marble-id uint) (buyer principal))
+    (let ((buyer-collection (default-to (list) (map-get? user-collections buyer))))
+        (map-set user-collections seller (list))
+        (map-set user-collections buyer (unwrap-panic (as-max-len? (append buyer-collection marble-id) u100)))
+        true))
+
+(define-private (remove-from-collection (collection (list 100 uint)) (marble-id uint))
+    (list))
+
 ;; Public Functions
 (define-public (mint-marble (name (string-ascii 64)) (rarity uint) (color (string-ascii 32)) (pattern (string-ascii 32)))
     (let ((marble-id (var-get next-marble-id))
@@ -83,12 +92,7 @@
         (try! (stx-transfer? (get price listing) tx-sender (get seller listing)))
         (map-set marbles (get marble-id listing) (merge marble { owner: tx-sender }))
         (map-set listings listing-id (merge listing { active: false }))
-        (let ((seller-collection (filter (lambda (id) (not (is-eq id (get marble-id listing))))
-                                        (default-to (list) (map-get? user-collections (get seller listing)))))
-              (buyer-collection (default-to (list) (map-get? user-collections tx-sender))))
-            (map-set user-collections (get seller listing) seller-collection)
-            (map-set user-collections tx-sender
-                (unwrap-panic (as-max-len? (append buyer-collection (get marble-id listing)) u100))))
+        (update-user-collections (get seller listing) (get marble-id listing) tx-sender)
         (ok (get marble-id listing))))
 
 (define-public (cancel-listing (listing-id uint))
@@ -122,4 +126,6 @@
         })))
 
 (define-private (get-single-marble-value (marble-id uint))
-    (default-to u0 (get-marble-value marble-id)))
+    (match (get-marble-value marble-id)
+        ok-value ok-value
+        err-value u0))
